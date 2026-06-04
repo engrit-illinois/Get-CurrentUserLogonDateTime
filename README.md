@@ -1,5 +1,5 @@
 # Summary
-This is a Powershell module meant to reliably return 
+This is a Powershell module meant to reliably return the current user's logon DateTime as determined by event viewer logs (specifically event #4624). This allows for a time resolution on the order of seconds, as opposed to minutes when using the `query` command. However it also frequently returns extraneous events since logging on often creates multiple events, and logon events are also triggered by other authorization processes.  
 
 # Usage
 1. Download `Get-CurrentUserLogonTime.psm1` to the appropriate subdirectory of your PowerShell [modules directory](https://github.com/engrit-illinois/how-to-install-a-custom-powershell-module).
@@ -22,8 +22,4 @@ Optional switch.
 Returns the entire gathered and calculated set of data, rather than just a summary of select attributes.  
 
 # Notes
-- It uses events 6005, 6006, and 6008 as authoritative proof of boots and shutdowns. See the script comments for documentation on the various relevant event IDs.
-- Currently it doesn't account for timezones, or do any of the fancy stats math that uptime.exe does. However, it returns a proper array of PowerShell objects, so that stuff could be done after the fact.
-- It does account for unexpected shutdowns.
-- Use "localhost" to get history for the local computer.
 - By mseng3. See my other projects here: https://github.com/mmseng/code-compendium.
