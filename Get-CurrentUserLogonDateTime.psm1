@@ -48,7 +48,7 @@ function Get-CurrentUserLogonDateTime {
 				FilterHashTable = $filter
 			}
 			
-			$events = Get-WinEvent @params
+			$events = Get-WinEvent @params -ErrorAction "SilentlyContinue"
 			
 			# Initial quick filter based on whether current username is found anywhere in the giant Message string property
 			# Filtering down to the exact username will be easier after parsing out this string into individual properties
