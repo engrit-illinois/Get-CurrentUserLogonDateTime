@@ -5,9 +5,8 @@ function Get-CurrentUserLogonDateTime {
 
 	[CmdletBinding()]
 	param(
-		[string]$ComputerName,
-		[int]$MaxLastEvents = 100,
-		[switch]$PassThru
+		[switch]$PassThru,
+		[int]$MaxLastEvents = 100
 	)
 	
 	begin {
@@ -48,7 +47,6 @@ function Get-CurrentUserLogonDateTime {
 			$params = @{
 				FilterHashTable = $filter
 			}
-			if($ComputerName) { $params.ComputerName = $ComputerName }
 			
 			$events = Get-WinEvent @params
 			
@@ -197,17 +195,49 @@ The authentication information fields provide detailed information about this sp
 		# Without this the sessions may include logins associated with apps lunched by the current user, but as a different user account
 		$sessions = $sessions | Where { $_.User -eq $env:UserName }
 		
-		# Filter out unlock events
+		# Save a copy of sessions without filtering further to output for the -PassThru parameter
+		$allUserSessions = $sessions
 		
+		# Of the remaining sessions, I think we should only have 2 or 3.
+		# If 3, the most recent would be associated with the most recent unlock event.
+		# The older 2 should be associated with the current session's original login, and they appear to always have an identical StartTime value, down to the millisecond.
+		if(-not $sessions) {
+			Throw "No matching sessions were identified!"
+		}
 		
+		# Because this relies so heavily on assumptions, let's make sure to raise an error if those assumptions are incorrect
+		$sessionsCount = $session.count
+		if($sessionsCount -gt 3) {
+			Throw "Identified more than the expected number of sessions to evaluate (found $sessionsCount)!"
+		}
+		
+		# The TimeCreated value of the associated login event does appear to happen slightly later (on the order of hundredths of a second), but these values are still identical between the 2 distinct events.
+		# So, these 2 should only differ (in relevant ways) in that one has an AuthenticationPackage property value of "Negotiate", while the other has a value of "Kerberos".
+		# This property apparently denotes which authentication subsystem was used to validate the user's credentials during login.
+		# It's unclear whether there would be any reason to prefer one or the other, or, more importantly, whether either is more likely to actually exist on a given system.
+		# Most likely, in the target environment, both will always be present.
+		# Thus, likely, we can just pick one arbitrarily (or randomly, based on sorting order). Just on principle it would be best to pick one intentionally, to maximize determinism.
+		# Let's go with Kerberos I guess.
+		$sessions = $sessions | Where { $_.AuthenticationPackage -eq "Kerberos" }
+		
+		$sessionsCount = $sessions.count
+		if($sessionsCount -gt 1) {
+			Throw "Identified more than the expected number of Kerberos-authenticated sessions to evaluate (found $sessionsCount)!"
+		}
+		if($sessionsCount -lt 1) {
+			Throw "No matching Kerberos-authenticated sessions were identifed!"
+		}
+		
+		# If any of these assumptions aren't correct, then there is no guarantee that the final result is at all accurate.
+		$finalDateTime = $sessions.StartTime
 	}
 	
 	end {
 		if($PassThru) {
-			$sessions | Sort "StartTime"
+			$allUserSessions | Sort "StartTime" | Select LogonId,StartTime,EventTimeCreated,User,EventAccountName,LogonType,LogonTypeFriendly,EventLogonType,EventLogonTypeFriendly,AuthenticationPackage,EventProcessName
 		}
 		else {
-			$sessions | Sort "StartTime" | Select LogonId,StartTime,EventTimeCreated,User,EventAccountName,LogonType,LogonTypeFriendly,EventLogonType,EventLogonTypeFriendly,AuthenticationPackage,EventProcessName
+			$finalDateTime
 		}
 	}
 }
