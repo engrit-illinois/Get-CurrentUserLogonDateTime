@@ -48,7 +48,7 @@ function Get-CurrentUserLogonDateTime {
 				FilterHashTable = $filter
 			}
 			
-			$events = Get-WinEvent @params -ErrorAction "SilentlyContinue"
+			$events = Get-WinEvent @params
 			
 			# Initial quick filter based on whether current username is found anywhere in the giant Message string property
 			# Filtering down to the exact username will be easier after parsing out this string into individual properties
@@ -166,7 +166,9 @@ The authentication information fields provide detailed information about this sp
 		# Get all relevant data
 		$sessions = Get-CimInstance "Win32_LogonSession" | Select *
 		$logonIds = Get-CimInstance "Win32_LoggedOnUser" | Select *
-		$events = Get-Events
+		if($PassThru) {
+			$events = Get-Events
+		}
 		
 		# Combine data from Win32_LogonSession, Win32_LoggedOnUser, and Get-WinEvent
 		$sessions = $sessions | ForEach-Object {
@@ -180,13 +182,15 @@ The authentication information fields provide detailed information about this sp
 			$user = $logonId.Antecedent.Name
 			$session | Add-Member -NotePropertyName "User" -NotePropertyValue $user
 			
-			# Combine data from Get-WinEvent
-			$event = $events | Where { $_.LogonIdInt -eq $session.LogonId }
-			$session | Add-Member -NotePropertyName "EventTimeCreated" -NotePropertyValue $event.TimeCreated
-			$session | Add-Member -NotePropertyName "EventLogonType" -NotePropertyValue $event.LogonType
-			$session | Add-Member -NotePropertyName "EventLogonTypeFriendly" -NotePropertyValue $event.LogonTypeFriendly
-			$session | Add-Member -NotePropertyName "EventAccountName" -NotePropertyValue $event.AccountName
-			$session | Add-Member -NotePropertyName "EventProcessName" -NotePropertyValue $event.ProcessName
+			if($PassThru) {
+				# Combine data from Get-WinEvent
+				$event = $events | Where { $_.LogonIdInt -eq $session.LogonId }
+				$session | Add-Member -NotePropertyName "EventTimeCreated" -NotePropertyValue $event.TimeCreated
+				$session | Add-Member -NotePropertyName "EventLogonType" -NotePropertyValue $event.LogonType
+				$session | Add-Member -NotePropertyName "EventLogonTypeFriendly" -NotePropertyValue $event.LogonTypeFriendly
+				$session | Add-Member -NotePropertyName "EventAccountName" -NotePropertyValue $event.AccountName
+				$session | Add-Member -NotePropertyName "EventProcessName" -NotePropertyValue $event.ProcessName
+			}
 			
 			$session
 		}

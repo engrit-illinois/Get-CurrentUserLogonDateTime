@@ -17,6 +17,7 @@ There are a couple of other sources to find this information, primarily WMI and 
 Optional switch.  
 Returns an array of login events with all of the relevant data that was evaluated before being filtered to a single event and stripped to its `StartTime` value.  
 Mostly for sanity checking the logic.  
+Note: This parameter also causes the module to gather relevant event log data and include that in the output. When running without elevation, this will throw an error due to not being able to access the relevant event log data. Because the normal use case for this module is to be run without elevation, and the `-PassThru` output is only meant for debugging purposes, this is considered intended behavior.  
 
 ### -MaxLastEvents [int]
 Optional integer.  
