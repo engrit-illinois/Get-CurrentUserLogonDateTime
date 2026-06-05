@@ -1,5 +1,3 @@
-# THIS SCRIPT IS A WORK IN PROGRESS
-
 # Summary
 This is a Powershell module meant to reliably return the DateTime corresponding to the exact time that the current user logged on.  
 
