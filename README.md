@@ -7,7 +7,7 @@ There are a couple of other sources to find this information, primarily WMI and 
 
 # Usage
 1. Download `Get-CurrentUserLogonTime.psm1` to the appropriate subdirectory of your PowerShell [modules directory](https://github.com/engrit-illinois/how-to-install-a-custom-powershell-module).
-2. Use it, e.g.: `Get-CurrentUserLogonTime -ComputerName "computer-name-01"`
+2. Use it, e.g.: `Get-CurrentUserLogonTime`
 
 # Parameters
 
