@@ -2,69 +2,77 @@
 # By mseng3
 
 function Get-CurrentUserLogonDateTime {
-	
+
 	[CmdletBinding()]
 	param(
 		[string]$ComputerName,
-		[int]$MaxLastEvents = 50,
+		[int]$MaxLastEvents = 100,
 		[switch]$PassThru
 	)
 	
 	begin {
-	
+		function log {
+			param(
+				[string]$Msg
+			)
+			Write-Host $Msg
+		}
+		
 		function Translate-LogonType($logonType) {
 			# https://learn.microsoft.com/en-us/previous-versions/windows/it-pro/windows-server-2003/cc787567(v=ws.10)
+			# https://learn.microsoft.com/en-us/windows/win32/cimwin32prov/win32-logonsession#properties
 			switch($logonType) {
 				"2" { "Interactive" }
 				"3" { "Network" }
 				"4" { "Batch" }
 				"5" { "Service" }
+				"6" { "Proxy" }
 				"7" { "Unlock" }
 				"8" { "NetworkCleartext" }
 				"9" { "NewCredentials" }
 				"10" { "RemoteInteractive" }
 				"11" { "CachedInteractive" }
+				"12" { "CachedRemoteInteractive " }
+				"13" { "CachedUnlock " }
 				default { "Unknown" }
 			}
 		}
-	
-		$filter = @{
-			LogName = "Security"
-			Id = 4624
-		}
-	}
-	
-	process {
-		$params = @{
-			FilterHashTable = $filter
-		}
-		if($ComputerName) { $params.ComputerName = $ComputerName }
 		
-		$events = Get-WinEvent @params
-		
-		# Initial quick filter based on whether current username is found anywhere in the giant Message string property
-		# Filtering down to the exact username will be easier after parsing out this string into individual properties
-		$events = $events | Where { $_.Message -like "*Account Name:*$($env:UserName)*" } | Sort "TimeCreated" | Select -Last $MaxLastEvents
-		
-		$messageLineFormats = @(
-			[PSCustomObject]@{ Property = "Computer"; LineNum = 4; Label = "AccountName:" },
-			[PSCustomObject]@{ Property = "LogonType"; LineNum = 9; Label = "LogonType:" },
-			[PSCustomObject]@{ Property = "SecurityId"; LineNum = 18; Label = "SecurityID:" },
-			[PSCustomObject]@{ Property = "AccountName"; LineNum = 19; Label = "AccountName:" },
-			[PSCustomObject]@{ Property = "AccountDomain"; LineNum = 20; Label = "AccountDomain:" },
-			[PSCustomObject]@{ Property = "LogonId"; LineNum = 21; Label = "LogonID:" },
-			[PSCustomObject]@{ Property = "LinkedLogonId"; LineNum = 22; Label = "LinkedLogonID:" },
-			[PSCustomObject]@{ Property = "ProcessName"; LineNum = 29; Label = "ProcessName:" },
-			[PSCustomObject]@{ Property = "WorkstationName"; LineNum = 32; Label = "WorkstationName:" }
-		)
-		
-		# Parse out interesting individual properties from the giant Message string proptery
-		$events = $events | ForEach-Object {
-			$event = $_
+		function Get-Events {
 			
-			$lines = $event.Message -split "`n"
+			# Get all login events
+			$filter = @{
+				LogName = "Security"
+				Id = 4624
+			}
+			$params = @{
+				FilterHashTable = $filter
+			}
+			if($ComputerName) { $params.ComputerName = $ComputerName }
 			
-			<# Example output
+			$events = Get-WinEvent @params
+			
+			# Initial quick filter based on whether current username is found anywhere in the giant Message string property
+			# Filtering down to the exact username will be easier after parsing out this string into individual properties
+			$events = $events | Where { $_.Message -like "*Account Name:*$($env:UserName)*" } | Sort "TimeCreated" | Select -Last $MaxLastEvents
+			
+			# Define the assumed structure of the giant Message string property
+			# If this structure output by Get-WinEvent (for this particular event) ever changes, this will break everything,
+			# but we can re-define that here.
+			# We just have to hope that this structure is consistent across all machines in all cases, for a given version of Get-WinEvent.
+			$messageLineFormats = @(
+				[PSCustomObject]@{ Property = "Computer"; LineNum = 4; Label = "AccountName:" },
+				[PSCustomObject]@{ Property = "LogonType"; LineNum = 9; Label = "LogonType:" },
+				[PSCustomObject]@{ Property = "SecurityId"; LineNum = 18; Label = "SecurityID:" },
+				[PSCustomObject]@{ Property = "AccountName"; LineNum = 19; Label = "AccountName:" },
+				[PSCustomObject]@{ Property = "AccountDomain"; LineNum = 20; Label = "AccountDomain:" },
+				[PSCustomObject]@{ Property = "LogonId"; LineNum = 21; Label = "LogonID:" },
+				[PSCustomObject]@{ Property = "LinkedLogonId"; LineNum = 22; Label = "LinkedLogonID:" },
+				[PSCustomObject]@{ Property = "ProcessName"; LineNum = 29; Label = "ProcessName:" },
+				[PSCustomObject]@{ Property = "WorkstationName"; LineNum = 32; Label = "WorkstationName:" }
+			)
+			
+			<# Example structure of Message property:
 			
 An account was successfully logged on.
 
@@ -129,28 +137,77 @@ The authentication information fields provide detailed information about this sp
 		
 			#>
 			
-			$messageLineFormats | ForEach-Object {
-				$value = $lines[$_.LineNum] -replace "\s","" -replace $_.Label,""
-				$event | Add-Member -NotePropertyName $_.Property -NotePropertyValue $value.Trim()
+			# Parse out interesting individual properties from the giant Message string proptery
+			$events = $events | ForEach-Object {
+				$event = $_
+				
+				$lines = $event.Message -split "`n"
+				
+				$messageLineFormats | ForEach-Object {
+					$value = $lines[$_.LineNum] -replace "\s","" -replace $_.Label,""
+					$event | Add-Member -NotePropertyName $_.Property -NotePropertyValue $value.Trim()
+				}
+				
+				$logonTypeFriendly = Translate-LogonType $event.LogonType
+				$event | Add-Member -NotePropertyName "LogonTypeFriendly" -NotePropertyValue $logonTypeFriendly
+				
+				$logonIdInt = [int]$event.LogonId
+				$event | Add-Member -NotePropertyName "LogonIdInt" -NotePropertyValue $logonIdInt
+				
+				$linkedLogonIdInt = [int]$event.LinkedLogonId
+				$event | Add-Member -NotePropertyName "LinkedLogonIdInt" -NotePropertyValue $linkedLogonIdInt
+				
+				$event
 			}
 			
-			$logonTypeFriendly = Translate-LogonType $event.LogonType
-			$event | Add-Member -NotePropertyName "LogonTypeFriendly" -NotePropertyValue $logonTypeFriendly
+			$events
+		}
+	}
+	
+	process {
+		# Get all relevant data
+		$sessions = Get-CimInstance "Win32_LogonSession" | Select *
+		$logonIds = Get-CimInstance "Win32_LoggedOnUser" | Select *
+		$events = Get-Events
+		
+		# Combine data from Win32_LogonSession, Win32_LoggedOnUser, and Get-WinEvent
+		$sessions = $sessions | ForEach-Object {
+			$session = $_ 
 			
-			$event
+			# Translate LogonType of Win32_LogonSession
+			$session | Add-Member -NotePropertyName "LogonTypeFriendly" -NotePropertyValue (Translate-LogonType $session.LogonType);
+			
+			# Combine data from Win32_LoggedOnUser
+			$logonId = $logonIds | Where { $_.Dependent.LogonId -eq $session.LogonId }
+			$user = $logonId.Antecedent.Name
+			$session | Add-Member -NotePropertyName "User" -NotePropertyValue $user
+			
+			# Combine data from Get-WinEvent
+			$event = $events | Where { $_.LogonIdInt -eq $session.LogonId }
+			$session | Add-Member -NotePropertyName "EventTimeCreated" -NotePropertyValue $event.TimeCreated
+			$session | Add-Member -NotePropertyName "EventLogonType" -NotePropertyValue $event.LogonType
+			$session | Add-Member -NotePropertyName "EventLogonTypeFriendly" -NotePropertyValue $event.LogonTypeFriendly
+			$session | Add-Member -NotePropertyName "EventAccountName" -NotePropertyValue $event.AccountName
+			$session | Add-Member -NotePropertyName "EventProcessName" -NotePropertyValue $event.ProcessName
+			
+			$session
 		}
 		
-		# Filter down to exact username
-		# Without this events for, e.g. user su-mseng3 will also show up for user mseng3, etc.
-		$events = $events | Where { $_.AccountName -eq $env:UserName }
+		# Filter to sessions corresponding to the current user
+		# Without this the sessions may include logins associated with apps lunched by the current user, but as a different user account
+		$sessions = $sessions | Where { $_.User -eq $env:UserName }
+		
+		# Filter out unlock events
+		
+		
 	}
 	
 	end {
 		if($PassThru) {
-			$events | Sort "TimeCreated"
+			$sessions | Sort "StartTime"
 		}
 		else {
-			$events | Sort "TimeCreated" | Select TimeCreated,LogonType,LogonTypeFriendly,AccountName,LogonId,LinkedLogonId,ProcessName
+			$sessions | Sort "StartTime" | Select LogonId,StartTime,EventTimeCreated,User,EventAccountName,LogonType,LogonTypeFriendly,EventLogonType,EventLogonTypeFriendly,AuthenticationPackage,EventProcessName
 		}
 	}
 }
