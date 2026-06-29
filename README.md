@@ -5,7 +5,7 @@ You would think this would be easy to do, and it is, sort of. The `query user` c
 
 There are a couple of other sources to find this information, primarily WMI and Event Logs, but they each require quite a bit of logic and manipulation in order to narrow down the exact correct session and recover its actual start time. That is what this module does. Initially it was made to sanity check the information available through WMI against event logs to ensure accuracy. However the necessary event log data is only available to an elevated process. Once the event log data was used to understand the behavior of the relevant WMI output, the module was written to rely solely on the, now trusted, WMI output, which can be accessed without elevation.  
 
-Currently the module only works to return the logon time of the current user; that is, the user running the module. In theory this could be generalized to work more like `query user` and return any or all users (within the limitations of `Win32_LogonSession` and `Win32_LoggedOnUser`), but that is not currently implemented.  
+Currently the module only works to return the logon time of the current user; that is, the user running the module. In theory this could be generalized to work more like `query user` to return this data about any or all users (within the limitations of `Win32_LogonSession` and `Win32_LoggedOnUser`), but that is not currently implemented.  
 
 # Usage
 1. Download `Get-CurrentUserLogonTime.psm1` to the appropriate subdirectory of your PowerShell [modules directory](https://github.com/engrit-illinois/how-to-install-a-custom-powershell-module).
